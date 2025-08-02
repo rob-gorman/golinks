@@ -1,0 +1,12 @@
+TOP_DIR := $(shell realpath --relative-to $(TOP_DIR) $(realpath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))))
+
+.PHONY: all
+all: test build/template
+
+.PHONY: test
+test:
+	go test -v -race -covermode=atomic -coverprofile=coverage.out ./...
+
+.PHONY: pre_commit_hook
+pre_commit_hook:
+	git config core.hooksPath $(TOP_DIR)/.githooks

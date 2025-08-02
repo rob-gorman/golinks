@@ -1,0 +1,25 @@
+/build/
+/tools/*
+
+# Go
+*.pb.go
+go.work
+go.work.sum
+*.test
+*.prof
+# go-templ codegen output
+*_templ.go
+
+# Binaries
+*.hex
+*.bin
+*.blob
+
+# Logs
+*.log
+
+.vscode
+
+# testing
+coverage.out
+coverage/

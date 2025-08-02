@@ -1,0 +1,1 @@
+# GoLinks DNS Resolver
