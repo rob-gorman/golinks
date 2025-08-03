@@ -1,17 +1,23 @@
+// I haven't worked with SQL in years and so this is pretty naive and sad.
+// For a more complex data model, I'd probably split the default Store implementation
+// to its own package and manage type definitions accordingly.
 package store
 
 import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
+	"time"
 )
 
+// internal db representation of a link; not all that necessary tbh
 type linkRecord struct {
-	Id    int64
-	Short string
-	Url   string
-	Desc  string
+	Id       int64
+	Short    string
+	Url      string
+	Desc     string
+	Created  time.Time
+	Accessed *sql.NullTime // TODO
 }
 
 func (lr linkRecord) toGoLink() GoLink {
@@ -24,7 +30,7 @@ func (lr linkRecord) toGoLink() GoLink {
 }
 
 func (lr *linkRecord) scan(row interface{ Scan(...any) error }) error {
-	return row.Scan(&lr.Id, &lr.Short, &lr.Url, &lr.Desc)
+	return row.Scan(&lr.Id, &lr.Short, &lr.Url, &lr.Desc, &lr.Created, &lr.Accessed)
 }
 
 const _table = "golinks"
@@ -52,15 +58,15 @@ func (s SqlStore) GetLink(ctx context.Context, short string) (GoLink, StoreError
 	return lr.toGoLink(), nil
 }
 
-func (s SqlStore) CreateLink(ctx context.Context, l GoLink) (int64, StoreError) {
-	const q = `INSERT INTO ` + _table + ` (short, url, description) VALUES ($1,$2,$3) RETURNING id`
+func (s SqlStore) CreateLink(ctx context.Context, l GoLink) (GoLink, StoreError) {
+	const q = `INSERT INTO ` + _table + ` (short, url, description) VALUES ($1,$2,$3) RETURNING *`
 	var lr linkRecord
 	row := s.db.QueryRowContext(ctx, q, l.Short, l.Url, l.Desc)
-	if err := row.Scan(&lr.Id); err != nil {
-		return 0, &sqlError{fmt.Errorf("failed to create link: %w", err)}
+	if err := lr.scan(row); err != nil {
+		return GoLink{}, wrap(err)
 	}
 
-	return lr.Id, nil
+	return lr.toGoLink(), nil
 }
 
 // UpdateLink overwrites Full, Short & Desc matched on Short.
@@ -69,7 +75,8 @@ func (s SqlStore) UpdateLink(ctx context.Context, update LinkUpdate, shortId str
 	UPDATE ` + _table + `
 	SET short       = COALESCE($1, short),
 		url         = COALESCE($2, url),
-		description = COALESCE($3, description)
+		description = COALESCE($3, description),
+		accessed    = CURRENT_TIMESTAMP
 	WHERE short = $4`
 
 	res, err := s.db.ExecContext(ctx, q, update.Short, update.Url, update.Desc, shortId)
@@ -98,8 +105,9 @@ func (s SqlStore) DeleteLink(ctx context.Context, short string) StoreError {
 	return nil
 }
 
+// No limit for pagination; probably fine
 func (s SqlStore) ListLinks(ctx context.Context) ([]GoLink, StoreError) {
-	const q = `SELECT id, short, url, description FROM ` + _table + ` ORDER BY short`
+	const q = `SELECT * FROM ` + _table + ` ORDER BY short`
 	rows, err := s.db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, wrap(err)
@@ -153,7 +161,9 @@ func createTable(db *sql.DB) error {
 		id INTEGER PRIMARY KEY,
 		short TEXT NOT NULL UNIQUE,
 		url TEXT NOT NULL,
-		description TEXT
+		description TEXT,
+		created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		accessed TIMESTAMP
 	);`
 
 	if _, err := db.Exec(q); err != nil {

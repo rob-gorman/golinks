@@ -9,7 +9,7 @@ import (
 
 type Store interface {
 	GetLink(context.Context, string) (GoLink, StoreError)
-	CreateLink(context.Context, GoLink) (int64, StoreError)
+	CreateLink(context.Context, GoLink) (GoLink, StoreError) // maybe return just ID
 	UpdateLink(context.Context, LinkUpdate, string) StoreError
 	DeleteLink(context.Context, string) StoreError
 	ListLinks(context.Context) ([]GoLink, StoreError)
@@ -26,12 +26,26 @@ func (l GoLink) Validate() error {
 	if l.Short == "" {
 		return errors.New("short link cannot be empty")
 	}
-	if l.Url == "" {
-		return errors.New("full url cannot be empty")
-	}
-	if _, err := url.Parse(l.Url); err != nil {
+	if err := validateUrl(l.Url); err != nil {
 		return fmt.Errorf("full url must be a valid URL: %w", err)
 	}
+	return nil
+}
+
+func validateUrl(rawUrl string) error {
+	if rawUrl == "" {
+		return errors.New("url cannot be empty")
+	}
+
+	u, err := url.Parse(rawUrl)
+	if err != nil {
+		return err
+	}
+
+	if u.Scheme == "" || u.Host == "" {
+		return errors.New("url must be absolute")
+	}
+
 	return nil
 }
 
@@ -51,17 +65,15 @@ func (update LinkUpdate) Validate() error {
 		return nil // happy path
 	}
 
-	if *update.Url == "" {
-		return errors.New("full url cannot be empty")
-	}
-	if _, err := url.Parse(*update.Url); err != nil {
+	if err := validateUrl(*update.Url); err != nil {
 		return fmt.Errorf("full url must be a valid URL: %w", err)
 	}
+
 	return nil
 }
 
 // We could just check for sql.ErrNoRows, but this is a slightly
-// more directly expressed requirement, in case we're a Mongo household
+// more directly expressed requirement, in case we're a Mongo/Redis shop
 // or something.
 type StoreError interface {
 	error

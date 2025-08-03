@@ -34,13 +34,13 @@ func TestSqlStore_CRUD(t *testing.T) {
 		Desc:  "A test link",
 	}
 
-	created := link
+	var created GoLink // mutate this poor thing along the way
 	t.Run("create", func(t *testing.T) {
-		id, err := store.CreateLink(ctx, link)
+		inserted, err := store.CreateLink(ctx, link)
 		require.NoError(t, err)
-		require.NotZero(t, id)
+		require.NotEmpty(t, inserted.Id)
 
-		created.Id = id
+		created = inserted
 	})
 
 	t.Run("get", func(t *testing.T) {
@@ -57,6 +57,7 @@ func TestSqlStore_CRUD(t *testing.T) {
 	})
 
 	t.Run("update", func(t *testing.T) {
+		t.Run("description", func(t *testing.T) {
 		desc := "Updated description"
 		update := LinkUpdate{Desc: &desc}
 
@@ -68,7 +69,27 @@ func TestSqlStore_CRUD(t *testing.T) {
 
 		assert.Equal(t, created.Short, fetched.Short)
 		assert.NotEqual(t, created.Desc, fetched.Desc)
-		assert.Equal(t, desc, fetched.Desc)
+			assert.Equal(t, desc, fetched.Desc)
+		})
+
+		t.Run("short link", func(t *testing.T) {
+			short := "updated"
+			update := LinkUpdate{Short: &short}
+			err := store.UpdateLink(ctx, update, created.Short)
+			require.NoError(t, err)
+
+			// old no longer exists
+			_, err = store.GetLink(ctx, created.Short)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, sql.ErrNoRows)
+
+			// retrieve updated
+			fetched, err := store.GetLink(ctx, short)
+			require.NoError(t, err)
+			assert.Equal(t, short, fetched.Short)
+
+			created = fetched // this is not ok; I am just lazy
+		})
 	})
 
 	t.Run("delete", func(t *testing.T) {
@@ -95,7 +116,7 @@ func TestSqlStore_Persistence(t *testing.T) {
 		Url:   "https://example.com/persist",
 		Desc:  "This should be saved to disk.",
 	}
-	createdId, err := store1.CreateLink(ctx, link)
+	created, err := store1.CreateLink(ctx, link)
 	require.NoError(t, err)
 	require.NoError(t, db1.Close())
 
@@ -109,7 +130,7 @@ func TestSqlStore_Persistence(t *testing.T) {
 
 	fetched, err := store2.GetLink(ctx, "persist")
 	require.NoError(t, err)
-	assert.Equal(t, createdId, fetched.Id)
+	assert.Equal(t, created, fetched)
 }
 
 func TestSqlError(t *testing.T) {

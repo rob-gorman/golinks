@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/rob-gorman/golinks-dns/api/store"
 	"github.com/rob-gorman/golinks-dns/internal/log"
@@ -41,7 +42,7 @@ func (api Api) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	api.router.ServeHTTP(w, r)
 }
 
-// resolves a short link to its full URL
+// as the arbiter of our data, the API itself is responsible for resolving a short link to its full URL
 func (api Api) Resolve(ctx context.Context, short string) (full string, err error) {
 	if short == "" {
 		return "", errors.New("cannot resolve empty short link")
@@ -77,22 +78,35 @@ func configureRouter(
 	return router
 }
 
+type oneResponse struct {
+	Data      store.GoLink `json:"data"`
+	Status    int          `json:"status"`
+	Error     string       `json:"error,omitempty"`
+	Timestamp time.Time    `json:"timestamp"`
+}
+
+func (r oneResponse) status() int {
+	return r.Status
+}
+
 func handleGetLink(db store.Store, log log.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		short := r.PathValue("id")
 		link, err := db.GetLink(r.Context(), short)
 		if err != nil {
 			if err.IsNotFound() {
-				serveError(w, "link not found", http.StatusNotFound)
+				serveError(w, apiError(err, http.StatusNotFound), log)
 				return
 			}
 			log.Errorw("failed to get link", "error", err)
-			serveError(w, "failed to get link", http.StatusInternalServerError)
+			serveError(w, apiError(err, http.StatusInternalServerError), log)
 			return
 		}
 
-		resp := map[string]any{
-			"data": link,
+		resp := oneResponse{
+			Data:      link,
+			Status:    http.StatusOK,
+			Timestamp: time.Now(),
 		}
 
 		serveResponse(w, resp, log)
@@ -104,21 +118,21 @@ func handleCreateLink(db store.Store, log log.Logger) http.HandlerFunc {
 		link, err := parseRequest[store.GoLink](r)
 		if err != nil {
 			log.Errorw("failed to parse request", "error", err)
-			serveError(w, "error encountered parsing request", http.StatusBadRequest)
+			serveError(w, apiError(err, http.StatusBadRequest), log)
 			return
 		}
 
 		created, err := db.CreateLink(r.Context(), link)
 		if err != nil {
 			log.Errorw("failed to create link", "error", err, "link", link)
-			serveError(w, "failed to create link", http.StatusInternalServerError)
+			serveError(w, apiError(err, http.StatusInternalServerError), log)
 			return
 		}
 
-		resp := map[string]any{
-			"data": map[string]any{
-				"id": created,
-			},
+		resp := oneResponse{
+			Data:      created,
+			Status:    http.StatusCreated,
+			Timestamp: time.Now(),
 		}
 
 		serveResponse(w, resp, log)
@@ -130,7 +144,7 @@ func handleUpdateLink(db store.Store, log log.Logger) http.HandlerFunc {
 		update, err := parseRequest[store.LinkUpdate](r)
 		if err != nil {
 			log.Errorw("failed to parse request", "error", err)
-			serveError(w, "error encountered parsing request", http.StatusBadRequest)
+			serveError(w, apiError(err, http.StatusBadRequest), log)
 			return
 		}
 
@@ -138,11 +152,11 @@ func handleUpdateLink(db store.Store, log log.Logger) http.HandlerFunc {
 		qErr := db.UpdateLink(r.Context(), update, short)
 		if qErr != nil {
 			if qErr.IsNotFound() {
-				serveError(w, "link not found", http.StatusNotFound)
+				serveError(w, apiError(qErr, http.StatusNotFound), log)
 				return
 			}
 			log.Errorw("failed to update link", "error", qErr)
-			serveError(w, "failed to update link", http.StatusInternalServerError)
+			serveError(w, apiError(qErr, http.StatusInternalServerError), log)
 			return
 		}
 
@@ -156,15 +170,26 @@ func handleDeleteLink(db store.Store, log log.Logger) http.HandlerFunc {
 		err := db.DeleteLink(r.Context(), short)
 		if err != nil {
 			if err.IsNotFound() {
-				serveError(w, "link not found", http.StatusNotFound)
+				serveError(w, apiError(err, http.StatusNotFound), log)
 				return
 			}
 			log.Errorw("failed to delete link", "error", err)
-			serveError(w, "failed to delete link", http.StatusInternalServerError)
+			serveError(w, apiError(err, http.StatusInternalServerError), log)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+type listResponse struct {
+	Data      []store.GoLink `json:"data,omitempty"`
+	Status    int            `json:"status"`
+	Timestamp time.Time      `json:"timestamp"`
+	Total     int            `json:"total"`
+}
+
+func (r listResponse) status() int {
+	return r.Status
 }
 
 func handleListLinks(db store.Store, log log.Logger) http.HandlerFunc {
@@ -172,31 +197,56 @@ func handleListLinks(db store.Store, log log.Logger) http.HandlerFunc {
 		links, err := db.ListLinks(r.Context())
 		if err != nil {
 			log.Errorw("failed to list links", "error", err)
-			serveError(w, "failed to list links", http.StatusInternalServerError)
+			serveError(w, apiError(err, http.StatusInternalServerError), log)
 			return
 		}
 
 		// no pagination for now
-		response := map[string]any{
-			"data":  links,
-			"total": len(links),
+		response := listResponse{
+			Data:      links,
+			Status:    http.StatusOK,
+			Timestamp: time.Now(),
+			Total:     len(links),
 		}
 
 		serveResponse(w, response, log)
 	}
 }
 
-func serveResponse(w http.ResponseWriter, resp map[string]any, log log.Logger) {
+type response interface {
+	status() int
+}
+
+func serveResponse[T response](w http.ResponseWriter, resp T, log log.Logger) {
+	w.WriteHeader(resp.status())
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Errorw("failed to encode response", "error", err)
-		serveError(w, "the server encountered an error", http.StatusInternalServerError)
+		// redundant status header write here
+		serveError(w, apiError(err, http.StatusInternalServerError), log)
 		return
 	}
 }
 
-// we may have a fancier error page one day
-func serveError(w http.ResponseWriter, msg string, status int) {
-	http.Error(w, msg, status)
+type errorResponse struct {
+	Error     string    `json:"error"`
+	Status    int       `json:"status"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// we do want to return the raw backend error here for our use case.
+func apiError(err error, status int) errorResponse {
+	return errorResponse{
+		Error:     err.Error(),
+		Status:    status,
+		Timestamp: time.Now(),
+	}
+}
+
+func serveError(w http.ResponseWriter, err errorResponse, log log.Logger) {
+	w.WriteHeader(err.Status)
+	if err := json.NewEncoder(w).Encode(err); err != nil {
+		log.Errorw("failed to encode error", "error", err)
+	}
 }
 
 func parseRequest[T interface{ Validate() error }](r *http.Request) (T, error) {
