@@ -8,8 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/rob-gorman/golinks-dns/api/store"
-	"github.com/rob-gorman/golinks-dns/internal/log"
+	"github.com/rob-gorman/golinks/api/store"
+	"github.com/rob-gorman/golinks/internal/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -126,7 +126,7 @@ func TestAPI_CRUD(t *testing.T) {
 func TestHandlers(t *testing.T) {
 	t.Parallel()
 
-	logger := log.Default()
+	logger := logger.Default()
 
 	type testCase struct {
 		name    string
@@ -395,7 +395,7 @@ func makeTestApi(t *testing.T) *Api {
 
 	db := makeTestStore(t)
 
-	logger := log.Default()
+	logger := logger.Default()
 
 	auth := new(noopMW)
 

@@ -3,9 +3,6 @@
 
 # Go
 *.pb.go
-go.work
-go.work.sum
-*.test
 *.prof
 # go-templ codegen output
 *_templ.go

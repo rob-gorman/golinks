@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rob-gorman/golinks-dns/api/store"
-	"github.com/rob-gorman/golinks-dns/internal/log"
+	"github.com/rob-gorman/golinks/api/store"
+	"github.com/rob-gorman/golinks/internal/logger"
 )
 
 // middleware to authorize both our standard read operations,
@@ -21,13 +21,13 @@ type AuthZMiddleware interface {
 type Api struct {
 	db     store.Store
 	router http.Handler
-	log    log.Logger
+	log    logger.Logger
 }
 
 func NewApi(ctx context.Context,
 	db store.Store,
 	auth AuthZMiddleware,
-	logger log.Logger,
+	logger logger.Logger,
 ) (Api, error) {
 
 	router := configureRouter(db, auth, logger)
@@ -59,7 +59,7 @@ func (api Api) Resolve(ctx context.Context, short string) (full string, err erro
 func configureRouter(
 	db store.Store,
 	auth AuthZMiddleware,
-	log log.Logger,
+	log logger.Logger,
 ) http.Handler {
 
 	var (
@@ -89,7 +89,7 @@ func (r oneResponse) status() int {
 	return r.Status
 }
 
-func handleGetLink(db store.Store, log log.Logger) http.HandlerFunc {
+func handleGetLink(db store.Store, log logger.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		short := r.PathValue("id")
 		link, err := db.GetLink(r.Context(), short)
@@ -98,7 +98,7 @@ func handleGetLink(db store.Store, log log.Logger) http.HandlerFunc {
 				serveError(w, apiError(err, http.StatusNotFound), log)
 				return
 			}
-			log.Errorw("failed to get link", "error", err)
+			log.Error("failed to get link", "error", err)
 			serveError(w, apiError(err, http.StatusInternalServerError), log)
 			return
 		}
@@ -113,18 +113,18 @@ func handleGetLink(db store.Store, log log.Logger) http.HandlerFunc {
 	}
 }
 
-func handleCreateLink(db store.Store, log log.Logger) http.HandlerFunc {
+func handleCreateLink(db store.Store, log logger.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		link, err := parseRequest[store.GoLink](r)
 		if err != nil {
-			log.Errorw("failed to parse request", "error", err)
+			log.Error("failed to parse request", "error", err)
 			serveError(w, apiError(err, http.StatusBadRequest), log)
 			return
 		}
 
 		created, err := db.CreateLink(r.Context(), link)
 		if err != nil {
-			log.Errorw("failed to create link", "error", err, "link", link)
+			log.Error("failed to create link", "error", err, "link", link)
 			serveError(w, apiError(err, http.StatusInternalServerError), log)
 			return
 		}
@@ -139,11 +139,11 @@ func handleCreateLink(db store.Store, log log.Logger) http.HandlerFunc {
 	}
 }
 
-func handleUpdateLink(db store.Store, log log.Logger) http.HandlerFunc {
+func handleUpdateLink(db store.Store, log logger.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		update, err := parseRequest[store.LinkUpdate](r)
 		if err != nil {
-			log.Errorw("failed to parse request", "error", err)
+			log.Error("failed to parse request", "error", err)
 			serveError(w, apiError(err, http.StatusBadRequest), log)
 			return
 		}
@@ -155,7 +155,7 @@ func handleUpdateLink(db store.Store, log log.Logger) http.HandlerFunc {
 				serveError(w, apiError(qErr, http.StatusNotFound), log)
 				return
 			}
-			log.Errorw("failed to update link", "error", qErr)
+			log.Error("failed to update link", "error", qErr)
 			serveError(w, apiError(qErr, http.StatusInternalServerError), log)
 			return
 		}
@@ -164,7 +164,7 @@ func handleUpdateLink(db store.Store, log log.Logger) http.HandlerFunc {
 	}
 }
 
-func handleDeleteLink(db store.Store, log log.Logger) http.HandlerFunc {
+func handleDeleteLink(db store.Store, log logger.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		short := r.PathValue("id")
 		err := db.DeleteLink(r.Context(), short)
@@ -173,7 +173,7 @@ func handleDeleteLink(db store.Store, log log.Logger) http.HandlerFunc {
 				serveError(w, apiError(err, http.StatusNotFound), log)
 				return
 			}
-			log.Errorw("failed to delete link", "error", err)
+			log.Error("failed to delete link", "error", err)
 			serveError(w, apiError(err, http.StatusInternalServerError), log)
 			return
 		}
@@ -192,11 +192,11 @@ func (r listResponse) status() int {
 	return r.Status
 }
 
-func handleListLinks(db store.Store, log log.Logger) http.HandlerFunc {
+func handleListLinks(db store.Store, log logger.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		links, err := db.ListLinks(r.Context())
 		if err != nil {
-			log.Errorw("failed to list links", "error", err)
+			log.Error("failed to list links", "error", err)
 			serveError(w, apiError(err, http.StatusInternalServerError), log)
 			return
 		}
@@ -217,10 +217,10 @@ type response interface {
 	status() int
 }
 
-func serveResponse[T response](w http.ResponseWriter, resp T, log log.Logger) {
+func serveResponse[T response](w http.ResponseWriter, resp T, log logger.Logger) {
 	w.WriteHeader(resp.status())
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		log.Errorw("failed to encode response", "error", err)
+		log.Error("failed to encode response", "error", err)
 		// redundant status header write here
 		serveError(w, apiError(err, http.StatusInternalServerError), log)
 		return
@@ -242,10 +242,10 @@ func apiError(err error, status int) errorResponse {
 	}
 }
 
-func serveError(w http.ResponseWriter, err errorResponse, log log.Logger) {
+func serveError(w http.ResponseWriter, err errorResponse, log logger.Logger) {
 	w.WriteHeader(err.Status)
 	if err := json.NewEncoder(w).Encode(err); err != nil {
-		log.Errorw("failed to encode error", "error", err)
+		log.Error("failed to encode error", "error", err)
 	}
 }
 

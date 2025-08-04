@@ -1,4 +1,4 @@
-package log
+package logger
 
 import (
 	"bytes"
@@ -9,10 +9,10 @@ import (
 )
 
 type Logger interface {
-	Debugw(string, ...any)
-	Infow(string, ...any)
-	Warnw(string, ...any)
-	Errorw(string, ...any)
+	Debug(string, ...any)
+	Info(string, ...any)
+	Warn(string, ...any)
+	Error(string, ...any)
 
 	AddContext(...any) Logger
 	NewWithContext(...any) Logger
@@ -28,7 +28,7 @@ func Default(writers ...io.Writer) Logger {
 		Level:     slog.LevelDebug,
 		AddSource: true,
 	}
-	handler := slog.NewJSONHandler(wr, opt)
+	handler := slog.NewTextHandler(wr, opt)
 
 	logger := slog.New(handler)
 	return &loggerT{Logger: logger}
@@ -49,19 +49,19 @@ func (l *loggerT) NewWithContext(args ...any) Logger {
 	}
 }
 
-func (l *loggerT) Debugw(msg string, args ...any) {
+func (l *loggerT) Debug(msg string, args ...any) {
 	l.Logger.Debug(msg, args...)
 }
 
-func (l *loggerT) Infow(msg string, args ...any) {
+func (l *loggerT) Info(msg string, args ...any) {
 	l.Logger.Info(msg, args...)
 }
 
-func (l *loggerT) Warnw(msg string, args ...any) {
+func (l *loggerT) Warn(msg string, args ...any) {
 	l.Logger.Warn(msg, args...)
 }
 
-func (l *loggerT) Errorw(msg string, args ...any) {
+func (l *loggerT) Error(msg string, args ...any) {
 	l.Logger.Error(msg, args...)
 }
 
@@ -96,7 +96,7 @@ func toMultiWriter(wrs ...io.Writer) io.Writer {
 
 // very simple thread-safe buffer for our logger output, if needed
 type Buffer struct {
-	buf *bytes.Buffer
+	buf   *bytes.Buffer
 	mutex sync.RWMutex
 }
 

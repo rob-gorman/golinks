@@ -1,12 +1,15 @@
 TOP_DIR := $(realpath $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 
 .PHONY: all
-all: \
-
-include Makefrag
+all: build test
 
 build:
 	mkdir -p build
+	go build -o build/golinks cmd/golinks/main.go
+
+.PHONY: test
+test:
+	go test -v -race -covermode=atomic -coverprofile=coverage.out ./...
 
 .PHONY: clean
 clean:
