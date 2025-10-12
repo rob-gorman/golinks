@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+var ErrNoRecord = errors.New("no record found")
+
 // internal db representation of a link; not all that necessary tbh
 type linkRecord struct {
 	Id       int64
@@ -49,28 +51,28 @@ func NewSqlStore(db *sql.DB) (SqlStore, error) {
 }
 
 // GetLink fetches a single record by short name.
-func (s SqlStore) GetLink(ctx context.Context, short string) (GoLink, StoreError) {
+func (s SqlStore) GetLink(ctx context.Context, short string) (GoLink, error) {
 	var lr linkRecord
 	const q = `SELECT * FROM ` + _table + ` WHERE short = $1`
 	if err := lr.scan(s.db.QueryRowContext(ctx, q, short)); err != nil {
-		return GoLink{}, wrap(err)
+		return GoLink{}, err
 	}
 	return lr.toGoLink(), nil
 }
 
-func (s SqlStore) CreateLink(ctx context.Context, l GoLink) (GoLink, StoreError) {
+func (s SqlStore) CreateLink(ctx context.Context, l GoLink) (GoLink, error) {
 	const q = `INSERT INTO ` + _table + ` (short, url, description) VALUES ($1,$2,$3) RETURNING *`
 	var lr linkRecord
 	row := s.db.QueryRowContext(ctx, q, l.Short, l.Url, l.Desc)
 	if err := lr.scan(row); err != nil {
-		return GoLink{}, wrap(err)
+		return GoLink{}, err
 	}
 
 	return lr.toGoLink(), nil
 }
 
 // UpdateLink overwrites Full, Short & Desc matched on Short.
-func (s SqlStore) UpdateLink(ctx context.Context, update LinkUpdate, shortId string) StoreError {
+func (s SqlStore) UpdateLink(ctx context.Context, update LinkUpdate, shortId string) error {
 	const q = `
 	UPDATE ` + _table + `
 	SET short       = COALESCE($1, short),
@@ -81,36 +83,36 @@ func (s SqlStore) UpdateLink(ctx context.Context, update LinkUpdate, shortId str
 
 	res, err := s.db.ExecContext(ctx, q, update.Short, update.Url, update.Desc, shortId)
 	if err != nil {
-		return wrap(err)
+		return err
 	}
 	if n, err := res.RowsAffected(); err != nil {
-		return wrap(err)
+		return err
 	} else if n == 0 {
-		return &sqlError{sql.ErrNoRows}
+		return ErrNoRecord
 	}
 
 	return nil
 }
 
 // DeleteLink removes by short name.
-func (s SqlStore) DeleteLink(ctx context.Context, short string) StoreError {
+func (s SqlStore) DeleteLink(ctx context.Context, short string) error {
 	const q = `DELETE FROM ` + _table + ` WHERE short = $1`
 	res, err := s.db.ExecContext(ctx, q, short)
 	if err != nil {
-		return wrap(err)
+		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return &sqlError{sql.ErrNoRows}
+		return ErrNoRecord
 	}
 	return nil
 }
 
 // No limit for pagination; probably fine
-func (s SqlStore) ListLinks(ctx context.Context) ([]GoLink, StoreError) {
+func (s SqlStore) ListLinks(ctx context.Context) ([]GoLink, error) {
 	const q = `SELECT * FROM ` + _table + ` ORDER BY short`
 	rows, err := s.db.QueryContext(ctx, q)
 	if err != nil {
-		return nil, wrap(err)
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -118,40 +120,12 @@ func (s SqlStore) ListLinks(ctx context.Context) ([]GoLink, StoreError) {
 	for rows.Next() {
 		var lr linkRecord
 		if err := lr.scan(rows); err != nil {
-			return nil, wrap(err)
+			return nil, err
 		}
 		out = append(out, lr.toGoLink())
 	}
 
 	return out, nil
-}
-
-type sqlError struct {
-	error
-}
-
-func wrap(err error) *sqlError {
-	if err == nil {
-		return nil
-	}
-	// don't double-wrap
-	var sqlErr = new(sqlError)
-	if errors.As(err, sqlErr) {
-		return sqlErr
-	}
-	return &sqlError{err}
-}
-
-func (err sqlError) Error() string {
-	return err.error.Error()
-}
-
-func (err sqlError) Unwrap() error {
-	return err.error
-}
-
-func (err sqlError) IsNotFound() bool {
-	return errors.Is(err, sql.ErrNoRows)
 }
 
 // our schema is tiny, so we'll just do it all in the application.

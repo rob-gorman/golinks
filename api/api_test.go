@@ -357,8 +357,9 @@ func TestHandlers(t *testing.T) {
 		handler := handleDeleteLink(db, logger)
 		for _, tt := range inserted {
 			short := tt.link.Short
-			t.Run(tt.name, func(t *testing.T) {
-				req := httptest.NewRequest(http.MethodDelete, "/links/"+short, nil)
+			t.Run(tt.link.Short, func(t *testing.T) {
+				path := "/links/" + short
+				req := httptest.NewRequest(http.MethodDelete, path, nil)
 				req.SetPathValue("id", short)
 				rr := httptest.NewRecorder()
 
@@ -367,7 +368,8 @@ func TestHandlers(t *testing.T) {
 
 				// Verify it's gone
 				getHandler := handleGetLink(db, logger)
-				req = httptest.NewRequest(http.MethodGet, "/links/"+short, nil)
+				req = httptest.NewRequest(http.MethodGet, path, nil)
+				req.SetPathValue("id", short)
 				rr = httptest.NewRecorder()
 
 				getHandler.ServeHTTP(rr, req)

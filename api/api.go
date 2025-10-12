@@ -94,7 +94,7 @@ func handleGetLink(db store.Store, log logger.Logger) http.HandlerFunc {
 		short := r.PathValue("id")
 		link, err := db.GetLink(r.Context(), short)
 		if err != nil {
-			if err.IsNotFound() {
+			if store.IsNotFound(err) {
 				serveError(w, apiError(err, http.StatusNotFound), log)
 				return
 			}
@@ -151,7 +151,7 @@ func handleUpdateLink(db store.Store, log logger.Logger) http.HandlerFunc {
 		short := r.PathValue("id")
 		qErr := db.UpdateLink(r.Context(), update, short)
 		if qErr != nil {
-			if qErr.IsNotFound() {
+			if store.IsNotFound(qErr) {
 				serveError(w, apiError(qErr, http.StatusNotFound), log)
 				return
 			}
@@ -169,7 +169,7 @@ func handleDeleteLink(db store.Store, log logger.Logger) http.HandlerFunc {
 		short := r.PathValue("id")
 		err := db.DeleteLink(r.Context(), short)
 		if err != nil {
-			if err.IsNotFound() {
+			if store.IsNotFound(err) {
 				serveError(w, apiError(err, http.StatusNotFound), log)
 				return
 			}

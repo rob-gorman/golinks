@@ -2,17 +2,18 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/url"
 )
 
 type Store interface {
-	GetLink(context.Context, string) (GoLink, StoreError)
-	CreateLink(context.Context, GoLink) (GoLink, StoreError) // maybe return just ID
-	UpdateLink(context.Context, LinkUpdate, string) StoreError
-	DeleteLink(context.Context, string) StoreError
-	ListLinks(context.Context) ([]GoLink, StoreError)
+	GetLink(context.Context, string) (GoLink, error)
+	CreateLink(context.Context, GoLink) (GoLink, error) // maybe return just ID
+	UpdateLink(context.Context, LinkUpdate, string) error
+	DeleteLink(context.Context, string) error
+	ListLinks(context.Context) ([]GoLink, error)
 }
 
 type GoLink struct {
@@ -72,10 +73,10 @@ func (update LinkUpdate) Validate() error {
 	return nil
 }
 
-// We could just check for sql.ErrNoRows, but this is a slightly
-// more directly expressed requirement, in case we're a Mongo/Redis shop
-// or something.
-type StoreError interface {
-	error
-	IsNotFound() bool
+// IsNotFound standardizes not-found checks for callers without exposing SQL details.
+func IsNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errors.Is(err, sql.ErrNoRows)
 }

@@ -11,16 +11,16 @@ type Resolver interface {
 	Resolve(context.Context, string) (string, error)
 }
 
-type RecordStore interface {
+type recordStore interface {
 	GetLink(context.Context, string) (store.GoLink, error)
 }
 
-func DefaultResolver(store RecordStore, log logger.Logger) Resolver {
+func DefaultResolver(store recordStore, log logger.Logger) Resolver {
 	return &defaultResolver{store: store}
 }
 
 type defaultResolver struct {
-	store RecordStore
+	store recordStore
 	cache cache
 	log   logger.Logger
 }

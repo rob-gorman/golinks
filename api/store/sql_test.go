@@ -132,9 +132,3 @@ func TestSqlStore_Persistence(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, created, fetched)
 }
-
-func TestSqlError(t *testing.T) {
-	var err StoreError = &sqlError{sql.ErrNoRows}
-	assert.True(t, err.IsNotFound())
-	assert.ErrorIs(t, err, sql.ErrNoRows)
-}
