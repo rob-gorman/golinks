@@ -1,5 +1,6 @@
 /build/
 /tools/*
+makefrag
 
 # Go
 *.pb.go

@@ -43,8 +43,8 @@ func validateUrl(rawUrl string) error {
 		return err
 	}
 
-	if u.Scheme == "" || u.Host == "" {
-		return errors.New("url must be absolute")
+	if u.Hostname() == "" {
+		return errors.New("url must have a hostname")
 	}
 
 	return nil
@@ -67,7 +67,7 @@ func (update LinkUpdate) Validate() error {
 	}
 
 	if err := validateUrl(*update.Url); err != nil {
-		return fmt.Errorf("full url must be a valid URL: %w", err)
+		return fmt.Errorf("full url %q must be a valid URL: %w", *update.Url, err)
 	}
 
 	return nil

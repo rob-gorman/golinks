@@ -1,0 +1,21 @@
+root = "."
+
+[build]
+  cmd = "templ generate -include-version=false && go build -o tmp/main internal/dev/frontend.go"
+  bin = "tmp/main"
+  args_bin = ["--dont_panic=true"]
+  exclude_dir = ["tmp", "vendor", "build"]
+  exclude_regex = [".*_templ.go"]
+  include_ext = ["go", "templ", "html", "css", "js"]
+  delay = 1000
+  rerun_delay = 5000
+
+[log]
+  time = true
+  main_only = false
+
+[color]
+  main = "yellow"
+  watcher = "cyan"
+  build = "green"
+  runner = "magenta"

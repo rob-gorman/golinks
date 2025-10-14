@@ -61,6 +61,10 @@ func (s SqlStore) GetLink(ctx context.Context, short string) (GoLink, error) {
 }
 
 func (s SqlStore) CreateLink(ctx context.Context, l GoLink) (GoLink, error) {
+	if err := l.Validate(); err != nil {
+		return GoLink{}, err
+	}
+
 	const q = `INSERT INTO ` + _table + ` (short, url, description) VALUES ($1,$2,$3) RETURNING *`
 	var lr linkRecord
 	row := s.db.QueryRowContext(ctx, q, l.Short, l.Url, l.Desc)

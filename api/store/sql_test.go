@@ -23,6 +23,8 @@ func testDb(t *testing.T, file ...string) *sql.DB {
 }
 
 func TestSqlStore_CRUD(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 	db := testDb(t)
 	store, err := NewSqlStore(db)
@@ -36,15 +38,37 @@ func TestSqlStore_CRUD(t *testing.T) {
 
 	var created GoLink // mutate this poor thing along the way
 	t.Run("create", func(t *testing.T) {
+		t.Run("valid", func(t *testing.T) {
 		inserted, err := store.CreateLink(ctx, link)
 		require.NoError(t, err)
-		require.NotEmpty(t, inserted.Id)
+			require.NotEmpty(t, inserted.Id)
 
-		created = inserted
+			created = inserted
+		})
+
+		t.Run("invalid-short", func(t *testing.T) {
+			link := GoLink{
+				Short: "",
+				Url:   "https://example.com/test",
+				Desc:  "A test link",
+			}
+			_, err := store.CreateLink(ctx, link)
+			require.Error(t, err)
+		})
+		
+		t.Run("invalid-url", func(t *testing.T) {
+			link := GoLink{
+				Short: "test",
+				Url:   "github.com",
+				Desc:  "A test link",
+			}
+			_, err := store.CreateLink(ctx, link)
+			require.Error(t, err)
+		})
 	})
 
 	t.Run("get", func(t *testing.T) {
-		fetched, err := store.GetLink(ctx, "test")
+		fetched, err := store.GetLink(ctx, link.Short)
 		require.NoError(t, err)
 		require.NotEmpty(t, fetched.Id)
 		assert.Equal(t, created, fetched)

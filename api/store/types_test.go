@@ -7,6 +7,8 @@ import (
 )
 
 func TestGoLink_Validate(t *testing.T) {
+	t.Parallel()
+	
 	tests := []struct {
 		name  string
 		link  GoLink
@@ -26,6 +28,14 @@ func TestGoLink_Validate(t *testing.T) {
 			link: GoLink{
 				Short: "invalid-url",
 				Url:   "invalid-url",
+				Desc:  "An invalid URL link",
+			},
+		},
+		{
+			name: "no scheme invalid",
+			link: GoLink{
+				Short: "no-scheme",
+				Url:   "example.com",
 				Desc:  "An invalid URL link",
 			},
 		},
@@ -52,8 +62,9 @@ func TestGoLink_Validate(t *testing.T) {
 }
 
 func TestLinkUpdate_Validate(t *testing.T) {
-	strPtr := func(s string) *string { return &s }
+	t.Parallel()
 
+	strPtr := func(s string) *string { return &s }
 	tests := []struct {
 		name  string
 		link  LinkUpdate
@@ -86,7 +97,7 @@ func TestLinkUpdate_Validate(t *testing.T) {
 			name: "invalid-url",
 			link: LinkUpdate{
 				Short: strPtr("valid-short-1"),
-				Url:   strPtr("invalid-url"),
+				Url:   strPtr("example.com"),
 				Desc:  strPtr("An invalid URL link"),
 			},
 		},
